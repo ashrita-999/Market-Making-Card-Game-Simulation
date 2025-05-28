@@ -96,78 +96,91 @@ class Team:
         reaction_time = end_time - start_time
         return reaction_time 
 
-
-def play_game(teams, known_deck, initial_bid, initial_ask):
+def play_game_2(teams, known_deck, initial_bid, initial_ask):
     current_bid = initial_bid
     current_ask = initial_ask
     market_state = {"current_bid": current_bid, "current_ask": current_ask}
-    
+
     remaining_teams = teams.copy()
     already_acted = set()
 
     while remaining_teams:
-        reaction_times = {}
-        decisions = {}
-
-        # Compute each team's decision and reaction time
-        for team in remaining_teams:
-            reaction_time = team.compute_reaction_time(known_deck, market_state)
-            reaction_times[team] = reaction_time
-            current_bid = market_state.get("current_bid")
-            current_ask = market_state.get("current_ask")
-            decision = team.make_decision(current_bid, current_ask, market_state, known_deck)
-            decisions[team] = decision 
-
-        # Sort teams by fastest reaction
-        ordered_teams = sorted(remaining_teams, key=lambda t: reaction_times[t])
-        acting_team = ordered_teams[0]
-
-        decision = decisions[acting_team]
-
-        print(f"\nTeam {teams.index(acting_team)} ({acting_team.label}) decides to {decision.upper()} (mean EV: {acting_team.estimate_EV(known_deck)[0]:.2f})")
-
-        # Apply action
-        if decision == 'buy':
-            print(f"Team {teams.index(acting_team)} ({acting_team.label}) BUYS at ask: {market_state['current_ask']:.2f}")
-        elif decision == 'sell':
-            print(f"Team {teams.index(acting_team)} ({acting_team.label}) SELLS at bid: {market_state['current_bid']:.2f}")
-        else:
-            print(f"Team {teams.index(acting_team)} ({acting_team.label}) does NOTHING.")
-            
-
-        # Remove this team from active pool
-        already_acted.add(acting_team)
-        remaining_teams = [t for t in teams if t not in already_acted]
+        # Compute reaction times for remaining teams
+        reaction_times = {team: team.compute_reaction_time(known_deck, market_state) for team in remaining_teams}
         
-def play_game_no_print(teams, known_deck, initial_bid, initial_ask):
+        # Sort teams by fastest reaction time
+        ordered_teams = sorted(remaining_teams, key=lambda t: reaction_times[t])
+        
+        # Process teams in order, updating market state after each action
+        for acting_team in ordered_teams:
+            # Make decision based on current market state
+            current_bid = market_state["current_bid"]
+            current_ask = market_state["current_ask"]
+            decision = acting_team.make_decision(current_bid, current_ask, market_state, known_deck)
+            
+            print(f"\nTeam {teams.index(acting_team)} ({acting_team.label}) decides to {decision.upper()} (mean EV: {acting_team.estimate_EV(known_deck)[0]:.2f})")
+            
+            if decision == 'buy':
+                print(f"Team {teams.index(acting_team)} ({acting_team.label}) BUYS at ask: {current_ask:.2f}")
+            elif decision == 'sell':
+                print(f"Team {teams.index(acting_team)} ({acting_team.label}) SELLS at bid: {current_bid:.2f}")
+            else:
+                print(f"Team {teams.index(acting_team)} ({acting_team.label}) does NOTHING.")
+            
+            # After acting, update the bid/ask based on this team's new estimate
+            mean, std = acting_team.estimate_EV(known_deck)
+            new_bid, new_ask = acting_team.set_bid_ask(mean, std)
+            market_state["current_bid"] = new_bid
+            market_state["current_ask"] = new_ask
+            print(f"Team {teams.index(acting_team)} ({acting_team.label}) BID/ASK: {new_bid:.2f} / {new_ask:.2f}")
+
+            
+            
+            # Remove this team from remaining teams
+            already_acted.add(acting_team)
+            remaining_teams = [t for t in teams if t not in already_acted]
+            
+            # Break if no teams remain
+            if not remaining_teams:
+                break
+                
+
+def play_game_2_no_print(teams, known_deck, initial_bid, initial_ask):
     current_bid = initial_bid
     current_ask = initial_ask
     market_state = {"current_bid": current_bid, "current_ask": current_ask}
-    
+
     remaining_teams = teams.copy()
     already_acted = set()
 
     while remaining_teams:
-        reaction_times = {}
-        decisions = {}
-
-        # Compute each team's decision and reaction time
-        for team in remaining_teams:
-            reaction_time = team.compute_reaction_time(known_deck, market_state)
-            reaction_times[team] = reaction_time
-            current_bid = market_state.get("current_bid")
-            current_ask = market_state.get("current_ask")
-            decision = team.make_decision(current_bid, current_ask, market_state, known_deck)
-            decisions[team] = decision 
-
-        # Sort teams by fastest reaction
+        # Compute reaction times for remaining teams
+        reaction_times = {team: team.compute_reaction_time(known_deck, market_state) for team in remaining_teams}
+        
+        # Sort teams by fastest reaction time
         ordered_teams = sorted(remaining_teams, key=lambda t: reaction_times[t])
-        acting_team = ordered_teams[0]
-
-        decision = decisions[acting_team]
-        # Remove this team from active pool
-        already_acted.add(acting_team)
-        remaining_teams = [t for t in teams if t not in already_acted]
+        
+        # Process teams in order, updating market state after each action
+        for acting_team in ordered_teams:
+            # Make decision based on current market state
+            current_bid = market_state["current_bid"]
+            current_ask = market_state["current_ask"]
+            decision = acting_team.make_decision(current_bid, current_ask, market_state, known_deck)
+            
+            
+            # After acting, update the bid/ask based on this team's new estimate
+            mean, std = acting_team.estimate_EV(known_deck)
+            new_bid, new_ask = acting_team.set_bid_ask(mean, std)
+            market_state["current_bid"] = new_bid
+            market_state["current_ask"] = new_ask
+            
+            # Remove this team from remaining teams
+            already_acted.add(acting_team)
+            remaining_teams = [t for t in teams if t not in already_acted]
+            
+            # Break if no teams remain
+            if not remaining_teams:
+                break
         
 
 def run_single_game():
@@ -200,7 +213,7 @@ def run_single_game():
             start_team = random.choice(teams)
             first_bid, first_ask = start_team.make_first_bid(deck)
             print(f"\nStart Team ({teams.index(start_team)}) makes first bid/ask: {first_bid:.2f} / {first_ask:.2f}, mean EV: {team.estimate_EV(deck)[0]:.2f})")
-            play_game(teams, deck, first_bid, first_ask)
+            play_game_2(teams, deck, first_bid, first_ask)
         
         else:
             for team in teams:
@@ -208,7 +221,7 @@ def run_single_game():
             start_team = random.choice(teams)
             first_bid, first_ask = start_team.make_first_bid(deck)
             print(f"\nStart Team ({teams.index(start_team)}) makes first bid/ask: {first_bid:.2f} / {first_ask:.2f}, mean EV: {team.estimate_EV(deck)[0]:.2f})")
-            play_game(teams, deck, first_bid, first_ask)
+            play_game_2(teams, deck, first_bid, first_ask)
         
     
     true_table_value = sum(market_cards)
@@ -253,14 +266,14 @@ def run_single_game_no_print():
         if round_num ==1:
             start_team = random.choice(teams)
             first_bid, first_ask = start_team.make_first_bid(deck)
-            play_game_no_print(teams, deck, first_bid, first_ask)
+            play_game_2_no_print(teams, deck, first_bid, first_ask)
         
         else:
             for team in teams:
                 team.private_cards.append(adj_deck.pop())
             start_team = random.choice(teams)
             first_bid, first_ask = start_team.make_first_bid(deck)
-            play_game_no_print(teams, deck, first_bid, first_ask)
+            play_game_2_no_print(teams, deck, first_bid, first_ask)
         
     
     true_table_value = sum(market_cards)
@@ -367,7 +380,3 @@ run_single_game()
 win_counts, strategies, bin_edges = run_simulation_heatmap(num_games=500)
 plot_heatmap_matplotlib(win_counts, strategies, bin_edges)
 plot_best_combo(win_counts, strategies, bin_edges)
-
-        
-    
-    
